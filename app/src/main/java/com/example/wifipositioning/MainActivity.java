@@ -37,7 +37,6 @@ public class MainActivity extends AppCompatActivity {
             System.exit(-1);
         }
     });
-    private static final int REQUEST_CODE_WIFI_PERMISSION = 100;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,7 +59,6 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View arg0) {
                 wifiManager = (WifiManager)getSystemService(Context.WIFI_SERVICE);
                 connection = wifiManager.getConnectionInfo();
-                List<ScanResult> availNetworks = wifiManager.getScanResults();
                 startWifiScan();
 
                 /*// List data for connected AP
