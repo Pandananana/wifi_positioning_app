@@ -5,15 +5,20 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.net.wifi.ScanResult;
 
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Environment;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -23,6 +28,8 @@ import android.Manifest;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.util.List;
 
 import okhttp3.MediaType;
@@ -43,6 +50,7 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     private Button button;
+    private Button download;
 
     TextView textView;
 
@@ -63,6 +71,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         button = (Button) findViewById(R.id.button1);
+        download = (Button) findViewById(R.id.button2);
         textView = (TextView) findViewById(R.id.text1);
 
         // Request fine location permission
@@ -83,8 +92,11 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        //https://www.googleapis.com/geolocation/v1/geolocate?key=AIzaSyA_S2GR_W78DxLa0RQ87Ce643r3-IsHwWg
-
+        download.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View arg0) {
+                downloadCsvFile();
+            }
+        });
     }
 
     private void startWifiScan() {
@@ -92,9 +104,9 @@ public class MainActivity extends AppCompatActivity {
         new SendWifiScanResultsTask().execute();
     }
 
-    private class SendWifiScanResultsTask extends AsyncTask<Void, Void, Void> {
+    private class SendWifiScanResultsTask extends AsyncTask<Void, Void, LocationData> {
         @Override
-        protected Void doInBackground(Void... voids) {
+        protected LocationData doInBackground(Void... voids) {
             try {
                 // Create a JSON object with the Wi-Fi scan results
                 JSONObject json = new JSONObject();
@@ -124,13 +136,83 @@ public class MainActivity extends AppCompatActivity {
                 JSONObject locationObject = jsonObject.getJSONObject("location");
                 double latitude = locationObject.getDouble("lat");
                 double longitude = locationObject.getDouble("lng");
+                double accuracy = jsonObject.getDouble("accuracy");
 
                 Log.d(TAG, "Latitude: " + latitude);
                 Log.d(TAG, "Longitude: " + longitude);
+                Log.d(TAG, "Accuracy: " + accuracy);
+
+                saveDataToCsv(latitude, longitude, accuracy);
+                return new LocationData(latitude, longitude, accuracy);
             } catch (IOException | JSONException e) {
                 Log.e(TAG, "Error: " + e.getMessage(), e);
             }
             return null;
         }
+
+        @Override
+        protected void onPostExecute(LocationData locationData) {
+            if (locationData != null) {
+                double latitude = locationData.getLatitude();
+                double longitude = locationData.getLongitude();
+                double accuracy = locationData.getAccuracy();
+                // Use the latitude, longitude, and accuracy values here
+                textView = (TextView) findViewById(R.id.text1);
+                String locationText = "Latitude: " + latitude + "\nLongitude: " + longitude + "\nAccuracy: " + accuracy;
+                textView.setText(locationText);
+            }
+        }
     }
+
+    public class LocationData {
+        private double latitude;
+        private double longitude;
+        private double accuracy;
+
+        public LocationData(double latitude, double longitude, double accuracy) {
+            this.latitude = latitude;
+            this.longitude = longitude;
+            this.accuracy = accuracy;
+        }
+
+        public double getLatitude() {
+            return latitude;
+        }
+
+        public double getLongitude() {
+            return longitude;
+        }
+
+        public double getAccuracy() {
+            return accuracy;
+        }
+    }
+
+    public void saveDataToCsv(double latitude, double longitude, double accuracy) {
+        File csvFile = new File(Environment.getExternalStorageDirectory() + "/" + Environment.DIRECTORY_DOWNLOADS + "/location_data.csv");
+        String[] data = {String.valueOf(latitude), String.valueOf(longitude), String.valueOf(accuracy)};
+        String csvRow = TextUtils.join(",", data);
+
+        try {
+            FileWriter csvWriter = new FileWriter(csvFile, true);
+            csvWriter.write(csvRow);
+            csvWriter.write("\n");
+            csvWriter.flush();
+            csvWriter.close();
+        } catch (IOException e) {
+            Log.e(TAG, "Error saving data to CSV file: " + e.getMessage(), e);
+        }
+    }
+
+    private void downloadCsvFile() {
+        File csvFile = new File(Environment.getExternalStorageDirectory() + "/" + Environment.DIRECTORY_DOWNLOADS + "/location_data.csv");
+
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        Uri uri = FileProvider.getUriForFile(this, "com.example.myapp.fileprovider", csvFile);
+        intent.setDataAndType(uri, "text/csv");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+        startActivity(Intent.createChooser(intent, "Download CSV file"));
+    }
+
 }
