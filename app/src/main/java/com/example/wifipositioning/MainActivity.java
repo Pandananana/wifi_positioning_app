@@ -61,14 +61,10 @@ public class MainActivity extends AppCompatActivity {
                 connection = wifiManager.getConnectionInfo();
                 startWifiScan();
 
-                /*// List data for connected AP
-                display = "SSID: "+connection.getSSID() +"\n" + "RSSI: " +connection.getRssi()+"\n"+"Mac Address: "+connection.getBSSID();
-                textView.setText(display);*/
-
             }
         });
 
-
+        //https://www.googleapis.com/geolocation/v1/geolocate?key=AIzaSyA_S2GR_W78DxLa0RQ87Ce643r3-IsHwWg
 
     }
     private void startWifiScan() {
@@ -80,15 +76,18 @@ public class MainActivity extends AppCompatActivity {
 
         // Display the scan results
         StringBuilder scanResultsBuilder = new StringBuilder();
-        for (ScanResult scanResult : scanResults) {
-            scanResultsBuilder.append("SSID: ")
-                    .append(scanResult.SSID)
-                    .append("\nMAC Address: ")
-                    .append(scanResult.BSSID)
-                    .append("\nRSSI: ")
-                    .append(scanResult.level)
-                    .append("\n\n");
+        scanResultsBuilder.append("[");
+        for (int i = 0; i < scanResults.size(); i++) {
+            ScanResult scanResult = scanResults.get(i);
+            scanResultsBuilder.append("{")
+                    .append("\n\"macAddress\": ").append(scanResult.BSSID).append(",")
+                    .append("\n\"signalStrength\": ").append(scanResult.level).append(",")
+                    .append("\n}");
+            if (i != scanResults.size() - 1) {
+                scanResultsBuilder.append(",\n");
+            }
         }
+        scanResultsBuilder.append("]");
         textView.setText(scanResultsBuilder.toString());
 
         // Log the scan results
