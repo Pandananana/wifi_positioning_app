@@ -12,6 +12,7 @@ import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.net.wifi.ScanResult;
 
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -19,6 +20,24 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.Manifest;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.List;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -55,9 +74,9 @@ public class MainActivity extends AppCompatActivity {
             requestPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION);
         }
 
-        button.setOnClickListener(new View.OnClickListener(){
+        button.setOnClickListener(new View.OnClickListener() {
             public void onClick(View arg0) {
-                wifiManager = (WifiManager)getSystemService(Context.WIFI_SERVICE);
+                wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
                 connection = wifiManager.getConnectionInfo();
                 startWifiScan();
 
@@ -67,34 +86,51 @@ public class MainActivity extends AppCompatActivity {
         //https://www.googleapis.com/geolocation/v1/geolocate?key=AIzaSyA_S2GR_W78DxLa0RQ87Ce643r3-IsHwWg
 
     }
+
     private void startWifiScan() {
-        // Start the Wi-Fi scan
         wifiManager.startScan();
+        new SendWifiScanResultsTask().execute();
+    }
 
-        // Get the scan results
-        List<ScanResult> scanResults = wifiManager.getScanResults();
+    private class SendWifiScanResultsTask extends AsyncTask<Void, Void, Void> {
+        @Override
+        protected Void doInBackground(Void... voids) {
+            try {
+                // Create a JSON object with the Wi-Fi scan results
+                JSONObject json = new JSONObject();
+                JSONArray array = new JSONArray();
+                List<ScanResult> scanResults = wifiManager.getScanResults();
+                for (ScanResult scanResult : scanResults) {
+                    JSONObject wifiObject = new JSONObject();
+                    wifiObject.put("macAddress", scanResult.BSSID);
+                    wifiObject.put("signalStrength", scanResult.level);
+                    array.put(wifiObject);
+                }
+                json.put("wifiAccessPoints", array);
 
-        // Display the scan results
-        StringBuilder scanResultsBuilder = new StringBuilder();
-        scanResultsBuilder.append("[");
-        for (int i = 0; i < scanResults.size(); i++) {
-            ScanResult scanResult = scanResults.get(i);
-            scanResultsBuilder.append("{")
-                    .append("\n\"macAddress\": ").append(scanResult.BSSID).append(",")
-                    .append("\n\"signalStrength\": ").append(scanResult.level).append(",")
-                    .append("\n}");
-            if (i != scanResults.size() - 1) {
-                scanResultsBuilder.append(",\n");
+                // Send the JSON object to the Google Maps Geolocation API
+                OkHttpClient client = new OkHttpClient();
+                MediaType mediaType = MediaType.parse("application/json");
+                RequestBody requestBody = RequestBody.create(json.toString(), mediaType);
+                Request request = new Request.Builder()
+                        .url("https://www.googleapis.com/geolocation/v1/geolocate?key=AIzaSyA_S2GR_W78DxLa0RQ87Ce643r3-IsHwWg")
+                        .post(requestBody)
+                        .build();
+                Response response = client.newCall(request).execute();
+                String responseBody = response.body().string();
+                Log.d(TAG, "Response: " + responseBody);
+
+                JSONObject jsonObject = new JSONObject(responseBody);
+                JSONObject locationObject = jsonObject.getJSONObject("location");
+                double latitude = locationObject.getDouble("lat");
+                double longitude = locationObject.getDouble("lng");
+
+                Log.d(TAG, "Latitude: " + latitude);
+                Log.d(TAG, "Longitude: " + longitude);
+            } catch (IOException | JSONException e) {
+                Log.e(TAG, "Error: " + e.getMessage(), e);
             }
-        }
-        scanResultsBuilder.append("]");
-        textView.setText(scanResultsBuilder.toString());
-
-        // Log the scan results
-        for (ScanResult scanResult : scanResults) {
-            Log.d(TAG, "SSID: " + scanResult.SSID
-                    + ", BSSID: " + scanResult.BSSID
-                    + ", RSSI: " + scanResult.level);
+            return null;
         }
     }
 }
