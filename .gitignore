@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+# Ignore API keys
+/app/src/main/res/values/api_keys.xml

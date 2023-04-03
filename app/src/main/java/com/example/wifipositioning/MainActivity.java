@@ -124,8 +124,9 @@ public class MainActivity extends AppCompatActivity {
                 OkHttpClient client = new OkHttpClient();
                 MediaType mediaType = MediaType.parse("application/json");
                 RequestBody requestBody = RequestBody.create(json.toString(), mediaType);
+                String apiKey = getString(R.string.google_maps_api_key);
                 Request request = new Request.Builder()
-                        .url("https://www.googleapis.com/geolocation/v1/geolocate?key=AIzaSyA_S2GR_W78DxLa0RQ87Ce643r3-IsHwWg")
+                        .url("https://www.googleapis.com/geolocation/v1/geolocate?key="+apiKey)
                         .post(requestBody)
                         .build();
                 Response response = client.newCall(request).execute();
