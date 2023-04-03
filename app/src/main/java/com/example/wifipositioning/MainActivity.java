@@ -21,6 +21,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.TextUtils;
+import android.os.IBinder;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -47,6 +48,9 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import android.os.Handler;
+import java.util.List;
+
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -56,18 +60,30 @@ public class MainActivity extends AppCompatActivity {
     private Button delete;
     private File csvFile;
 
-    TextView textView;
-
-    WifiManager wifiManager;
-    WifiInfo connection;
-    String display;
+    private WifiManager wifiManager;
+    private WifiInfo connection;
+    private String display;
     private static final String TAG = "WifiScanActivity";
 
-    private final ActivityResultLauncher<String> requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
-        if (!isGranted) {
+    private final ActivityResultLauncher<String[]> requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), permissions -> {
+        if (!permissions.containsValue(false)) {
+            // Permissions granted, start scan
+            startWifiScan();
+        } else {
+            // Permissions not granted, exit app
             System.exit(-1);
         }
     });
+
+    private final Handler handler = new Handler();
+    private boolean isAutomaticScanRunning = true;
+    private final Runnable automaticScanRunnable  = new Runnable() {
+        @Override
+        public void run() {
+            startWifiScan();
+            handler.postDelayed(this, 5000); // 5 seconds delay
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,23 +95,34 @@ public class MainActivity extends AppCompatActivity {
         delete = (Button) findViewById(R.id.button3);
         textView = (TextView) findViewById(R.id.text1);
 
-        // Request fine location permission
-        if (!(ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)) {
-            requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION);
-        }
-        // Request fine location permission
-        if (!(ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)) {
-            requestPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION);
+        // Request permissions
+        if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            String[] permissions = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION};
+            requestPermissionLauncher.launch(permissions);
+        } else {
+            // Permissions already granted, start scan
+            startWifiScan();
         }
 
         button.setOnClickListener(new View.OnClickListener() {
             public void onClick(View arg0) {
-                wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
-                connection = wifiManager.getConnectionInfo();
-                startWifiScan();
+                if (isAutomaticScanRunning) {
+                    // Stop automatic scan
+                    handler.removeCallbacks(automaticScanRunnable);
+                    isAutomaticScanRunning = false;
+                    button.setText("Start");
+                } else {
+                    // Start automatic scan
+                    wifiManager = (WifiManager)getSystemService(Context.WIFI_SERVICE);
+                    connection = wifiManager.getConnectionInfo();
+                    startWifiScan();
+                    handler.postDelayed(automaticScanRunnable, 5000); // Run every 5 seconds
+                    isAutomaticScanRunning = true;
+                    button.setText("Stop");
+                }
             }
         });
-
         download.setOnClickListener(new View.OnClickListener() {
             public void onClick(View arg0) {
                 downloadCsvFile();
@@ -107,9 +134,12 @@ public class MainActivity extends AppCompatActivity {
                 showDeleteConfirmationDialog();
             }
         });
+        
     }
-
+            
     private void startWifiScan() {
+        // Start the Wi-Fi scan
+        wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         wifiManager.startScan();
         new SendWifiScanResultsTask().execute();
     }
@@ -254,5 +284,17 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Start the handler when the activity is resumed
+        handler.postDelayed(automaticScanRunnable , 0);
+    }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Stop the handler when the activity is paused
+        handler.removeCallbacks(automaticScanRunnable );
+    }
 }

@@ -12,7 +12,7 @@
         android:layout_height="wrap_content"
         android:background="#FFFFFF"
         android:backgroundTint="#FFFFFF"
-        android:text="Refresh"
+        android:text="Stop"
         android:textColor="@android:color/black"
         app:layout_constraintBottom_toTopOf="@+id/button2"
         app:layout_constraintEnd_toEndOf="parent"
