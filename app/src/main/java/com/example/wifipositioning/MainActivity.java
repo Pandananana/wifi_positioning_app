@@ -7,7 +7,9 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -51,6 +53,8 @@ public class MainActivity extends AppCompatActivity {
 
     private Button button;
     private Button download;
+    private Button delete;
+    private File csvFile;
 
     TextView textView;
 
@@ -72,6 +76,7 @@ public class MainActivity extends AppCompatActivity {
 
         button = (Button) findViewById(R.id.button1);
         download = (Button) findViewById(R.id.button2);
+        delete = (Button) findViewById(R.id.button3);
         textView = (TextView) findViewById(R.id.text1);
 
         // Request fine location permission
@@ -88,13 +93,18 @@ public class MainActivity extends AppCompatActivity {
                 wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
                 connection = wifiManager.getConnectionInfo();
                 startWifiScan();
-
             }
         });
 
         download.setOnClickListener(new View.OnClickListener() {
             public void onClick(View arg0) {
                 downloadCsvFile();
+            }
+        });
+
+        delete.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View arg0) {
+                showDeleteConfirmationDialog();
             }
         });
     }
@@ -190,7 +200,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void saveDataToCsv(double latitude, double longitude, double accuracy) {
-        File csvFile = new File(Environment.getExternalStorageDirectory() + "/" + Environment.DIRECTORY_DOWNLOADS + "/location_data.csv");
+        csvFile = new File(Environment.getExternalStorageDirectory() + "/" + Environment.DIRECTORY_DOWNLOADS + "/location_data.csv");
         String[] data = {String.valueOf(latitude), String.valueOf(longitude), String.valueOf(accuracy)};
         String csvRow = TextUtils.join(",", data);
 
@@ -206,8 +216,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void downloadCsvFile() {
-        File csvFile = new File(Environment.getExternalStorageDirectory() + "/" + Environment.DIRECTORY_DOWNLOADS + "/location_data.csv");
-
         Intent intent = new Intent(Intent.ACTION_VIEW);
         Uri uri = FileProvider.getUriForFile(this, "com.example.myapp.fileprovider", csvFile);
         intent.setDataAndType(uri, "text/csv");
@@ -215,5 +223,36 @@ public class MainActivity extends AppCompatActivity {
 
         startActivity(Intent.createChooser(intent, "Download CSV file"));
     }
+
+    private void showDeleteConfirmationDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setMessage("Are you sure you want to delete the CSV file?")
+                .setPositiveButton("Delete", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        deleteCsvFile();
+                    }
+                })
+                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        // User cancelled the dialog
+                    }
+                });
+        // Create the AlertDialog object and show it
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+
+
+    private void deleteCsvFile() {
+        if (csvFile.exists()) {
+            boolean deleted = csvFile.delete();
+            if (deleted) {
+                Log.d(TAG, "File deleted successfully");
+            } else {
+                Log.d(TAG, "Failed to delete file");
+            }
+        }
+    }
+
 
 }
