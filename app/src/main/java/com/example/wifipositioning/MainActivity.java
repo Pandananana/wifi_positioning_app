@@ -6,6 +6,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import android.app.AlertDialog;
+import android.app.Service;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -20,6 +21,8 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.Manifest;
+import android.widget.NumberPicker;
+
 import java.io.File;
 
 public class MainActivity extends AppCompatActivity {
@@ -27,12 +30,14 @@ public class MainActivity extends AppCompatActivity {
     private Button button;
     private Button download;
     private Button delete;
+    private NumberPicker picker;
     private File csvFile;
     private WifiManager wifiManager;
     private static final String TAG = "myapp:WifiScanActivity";
     private static final int WAKE_LOCK_TIMEOUT = 5 * 1000; // 5 seconds
     private PowerManager.WakeLock mWakeLock;
     private boolean isAutomaticScanRunning = false;
+    private String scanDelay = "5";
 
     private final ActivityResultLauncher<String[]> requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), permissions -> {
         if (permissions.containsValue(false)) {
@@ -53,6 +58,10 @@ public class MainActivity extends AppCompatActivity {
         button = (Button) findViewById(R.id.button1);
         download = (Button) findViewById(R.id.button2);
         delete = (Button) findViewById(R.id.button3);
+        picker = findViewById(R.id.numberPicker);
+        picker.setMaxValue(60);
+        picker.setMinValue(1);
+        picker.setValue(5);
 
         // Request permissions
         if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
@@ -75,6 +84,7 @@ public class MainActivity extends AppCompatActivity {
                     isAutomaticScanRunning = true;
                     startWifiScanningService();
                     button.setText("Stop");
+
                 }
             }
         });
@@ -88,6 +98,7 @@ public class MainActivity extends AppCompatActivity {
                 showDeleteConfirmationDialog();
             }
         });
+
     }
 
     private void downloadCsvFile() {
@@ -142,6 +153,8 @@ public class MainActivity extends AppCompatActivity {
     private void startWifiScanningService() {
         Log.d(TAG, "startWifiScanningService: ");
         Intent intent = new Intent(this, WifiScanningService.class);
+        Log.d(TAG, "Picker Value: " + picker.getValue());
+        intent.putExtra("SCAN_DELAY", String.valueOf(picker.getValue()));
         ContextCompat.startForegroundService(this, intent);
     }
 

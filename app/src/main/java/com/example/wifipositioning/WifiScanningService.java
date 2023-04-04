@@ -42,17 +42,22 @@ public class WifiScanningService extends Service {
     private NotificationManager notificationManager;
     private static final String TAG = "myapp:ScanService";
     private File csvFile;
+    private int scanDelay;
 
     @Override
     public void onCreate() {
         super.onCreate();
         wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        startForeground(1, createNotification());
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null) {
+            scanDelay = Integer.parseInt(intent.getStringExtra("SCAN_DELAY"));
+            Log.d(TAG, "onStartCommand: " + scanDelay);
+        }
+        startForeground(1, createNotification());
         startScanning();
         return START_STICKY;
     }
@@ -90,7 +95,7 @@ public class WifiScanningService extends Service {
                 Log.d(TAG, "RSSI: " + scanResult.level);
             }
             new SendWifiScanResultsTask().execute();
-            handler.postDelayed(this, 5000); // 5 seconds delay
+            handler.postDelayed(this, scanDelay*1000); // 5 seconds delay
         }
     };
 
@@ -99,9 +104,10 @@ public class WifiScanningService extends Service {
         NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Wifi Scanning Service", NotificationManager.IMPORTANCE_DEFAULT);
         notificationManager.createNotificationChannel(channel);
 
+        Log.d(TAG, "Scanning wifi every " + scanDelay + " seconds");
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("Wifi Scanning Service")
-                .setContentText("Scanning wifi every 5 seconds")
+                .setContentText("Scanning wifi every " + scanDelay + " seconds")
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT);
 
