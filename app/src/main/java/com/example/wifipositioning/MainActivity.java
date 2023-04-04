@@ -13,30 +13,14 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
-import android.net.wifi.ScanResult;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.PowerManager;
-import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-import android.widget.TextView;
 import android.Manifest;
-import org.json.JSONArray;
-import org.json.JSONObject;
 import java.io.File;
-import java.io.FileWriter;
-import java.util.List;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-import org.json.JSONException;
-import java.io.IOException;
-import android.os.Handler;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -44,13 +28,11 @@ public class MainActivity extends AppCompatActivity {
     private Button download;
     private Button delete;
     private File csvFile;
-    private TextView textView;
     private WifiManager wifiManager;
-    private WifiInfo connection;
-    private String display;
     private static final String TAG = "myapp:WifiScanActivity";
     private static final int WAKE_LOCK_TIMEOUT = 5 * 1000; // 5 seconds
     private PowerManager.WakeLock mWakeLock;
+    private boolean isAutomaticScanRunning = false;
 
     private final ActivityResultLauncher<String[]> requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), permissions -> {
         if (permissions.containsValue(false)) {
@@ -58,9 +40,6 @@ public class MainActivity extends AppCompatActivity {
             System.exit(-1);
         }
     });
-
-    private final Handler handler = new Handler();
-    private boolean isAutomaticScanRunning = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,7 +53,6 @@ public class MainActivity extends AppCompatActivity {
         button = (Button) findViewById(R.id.button1);
         download = (Button) findViewById(R.id.button2);
         delete = (Button) findViewById(R.id.button3);
-        textView = (TextView) findViewById(R.id.text1);
 
         // Request permissions
         if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
@@ -89,15 +67,11 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View arg0) {
                 if (isAutomaticScanRunning) {
                     // Stop automatic scan
-                    handler.removeCallbacks(automaticScanRunnable);
                     isAutomaticScanRunning = false;
                     stopWifiScanningService();
                     button.setText("Start");
                 } else {
                     // Start automatic scan
-                    wifiManager = (WifiManager)getSystemService(Context.WIFI_SERVICE);
-                    connection = wifiManager.getConnectionInfo();
-                    //handler.post(automaticScanRunnable); // Run every 5 seconds
                     isAutomaticScanRunning = true;
                     startWifiScanningService();
                     button.setText("Stop");
@@ -114,129 +88,6 @@ public class MainActivity extends AppCompatActivity {
                 showDeleteConfirmationDialog();
             }
         });
-    }
-
-    private final Runnable automaticScanRunnable  = new Runnable() {
-        @Override
-        public void run() {
-            if (!isAutomaticScanRunning) {
-                Log.d(TAG, "Automatic Wifi Scan stopped");
-                return;
-            }
-            Log.d(TAG, "Starting Wifi Scan");
-            startWifiScan();
-            handler.postDelayed(this, 5000); // 5 seconds delay
-        }
-    };
-            
-    private void startWifiScan() {
-        // Start the Wi-Fi scan
-        wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        wifiManager.startScan();
-        Log.d(TAG, "Scan Done");
-        List<ScanResult> scanResults = wifiManager.getScanResults();
-        for (ScanResult scanResult : scanResults) {
-            Log.d(TAG, "MAC: "+scanResult.BSSID);
-            Log.d(TAG, "RSSI: "+ scanResult.level);
-        }
-        new SendWifiScanResultsTask().execute();
-    }
-
-    public class SendWifiScanResultsTask extends AsyncTask<Void, Void, LocationData> {
-        @Override
-        protected LocationData doInBackground(Void... voids) {
-            try {
-                // Create a JSON object with the Wi-Fi scan results
-                JSONObject json = new JSONObject();
-                JSONArray array = new JSONArray();
-                List<ScanResult> scanResults = wifiManager.getScanResults();
-                for (ScanResult scanResult : scanResults) {
-                    JSONObject wifiObject = new JSONObject();
-                    wifiObject.put("macAddress", scanResult.BSSID);
-                    wifiObject.put("signalStrength", scanResult.level);
-                    array.put(wifiObject);
-                }
-                json.put("wifiAccessPoints", array);
-
-                // Send the JSON object to the Google Maps Geolocation API
-                OkHttpClient client = new OkHttpClient();
-                MediaType mediaType = MediaType.parse("application/json");
-                RequestBody requestBody = RequestBody.create(json.toString(), mediaType);
-                String apiKey = getString(R.string.google_maps_api_key);
-                Request request = new Request.Builder()
-                        .url("https://www.googleapis.com/geolocation/v1/geolocate?key="+apiKey)
-                        .post(requestBody)
-                        .build();
-                Response response = client.newCall(request).execute();
-                String responseBody = response.body().string();
-                Log.d(TAG, "Response: " + responseBody);
-
-                JSONObject jsonObject = new JSONObject(responseBody);
-                JSONObject locationObject = jsonObject.getJSONObject("location");
-                double latitude = locationObject.getDouble("lat");
-                double longitude = locationObject.getDouble("lng");
-                double accuracy = jsonObject.getDouble("accuracy");
-
-                saveDataToCsv(latitude, longitude, accuracy);
-                return new LocationData(latitude, longitude, accuracy);
-            } catch (IOException | JSONException e) {
-                Log.e(TAG, "Error: " + e.getMessage(), e);
-            }
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(LocationData locationData) {
-            if (locationData != null) {
-                double latitude = locationData.getLatitude();
-                double longitude = locationData.getLongitude();
-                double accuracy = locationData.getAccuracy();
-                // Use the latitude, longitude, and accuracy values here
-                textView = (TextView) findViewById(R.id.text1);
-                String locationText = "Latitude: " + latitude + "\nLongitude: " + longitude + "\nAccuracy: " + accuracy;
-                textView.setText(locationText);
-            }
-        }
-    }
-
-    public class LocationData {
-        private double latitude;
-        private double longitude;
-        private double accuracy;
-
-        public LocationData(double latitude, double longitude, double accuracy) {
-            this.latitude = latitude;
-            this.longitude = longitude;
-            this.accuracy = accuracy;
-        }
-
-        public double getLatitude() {
-            return latitude;
-        }
-
-        public double getLongitude() {
-            return longitude;
-        }
-
-        public double getAccuracy() {
-            return accuracy;
-        }
-    }
-
-    public void saveDataToCsv(double latitude, double longitude, double accuracy) {
-        csvFile = new File(Environment.getExternalStorageDirectory() + "/" + Environment.DIRECTORY_DOWNLOADS + "/location_data.csv");
-        String[] data = {String.valueOf(latitude), String.valueOf(longitude), String.valueOf(accuracy)};
-        String csvRow = TextUtils.join(",", data);
-
-        try {
-            FileWriter csvWriter = new FileWriter(csvFile, true);
-            csvWriter.write(csvRow);
-            csvWriter.write("\n");
-            csvWriter.flush();
-            csvWriter.close();
-        } catch (IOException e) {
-            Log.e(TAG, "Error saving data to CSV file: " + e.getMessage(), e);
-        }
     }
 
     private void downloadCsvFile() {
