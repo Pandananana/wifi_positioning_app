@@ -2,6 +2,7 @@ package com.example.wifipositioning;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
@@ -9,6 +10,9 @@ import androidx.core.content.FileProvider;
 import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.Service;
+import android.app.job.JobInfo;
+import android.app.job.JobScheduler;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -20,6 +24,8 @@ import android.net.wifi.ScanResult;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.PersistableBundle;
+import android.os.PowerManager;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
@@ -53,7 +59,9 @@ public class MainActivity extends AppCompatActivity {
     private WifiManager wifiManager;
     private WifiInfo connection;
     private String display;
-    private static final String TAG = "WifiScanActivity";
+    private static final String TAG = "myapp:WifiScanActivity";
+    private static final int WAKE_LOCK_TIMEOUT = 5 * 1000; // 5 seconds
+    private PowerManager.WakeLock mWakeLock;
 
     private final ActivityResultLauncher<String[]> requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), permissions -> {
         if (!permissions.containsValue(false)) {
@@ -70,6 +78,7 @@ public class MainActivity extends AppCompatActivity {
     private final Runnable automaticScanRunnable  = new Runnable() {
         @Override
         public void run() {
+            Log.d(TAG, "Starting Wifi Scan");
             startWifiScan();
             handler.postDelayed(this, 5000); // 5 seconds delay
         }
@@ -79,6 +88,10 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        mWakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG);
+        mWakeLock.acquire(WAKE_LOCK_TIMEOUT);
 
         button = (Button) findViewById(R.id.button1);
         download = (Button) findViewById(R.id.button2);
@@ -131,6 +144,12 @@ public class MainActivity extends AppCompatActivity {
         // Start the Wi-Fi scan
         wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         wifiManager.startScan();
+        Log.d(TAG, "Scan Done");
+        List<ScanResult> scanResults = wifiManager.getScanResults();
+        for (ScanResult scanResult : scanResults) {
+            Log.d(TAG, "MAC: "+scanResult.BSSID);
+            Log.d(TAG, "RSSI: "+ scanResult.level);
+        }
         new SendWifiScanResultsTask().execute();
     }
 
@@ -147,6 +166,8 @@ public class MainActivity extends AppCompatActivity {
                     wifiObject.put("macAddress", scanResult.BSSID);
                     wifiObject.put("signalStrength", scanResult.level);
                     array.put(wifiObject);
+                    Log.d(TAG, "MAC: "+scanResult.BSSID);
+                    Log.d(TAG, "RSSI: "+ scanResult.level);
                 }
                 json.put("wifiAccessPoints", array);
 
@@ -168,10 +189,6 @@ public class MainActivity extends AppCompatActivity {
                 double latitude = locationObject.getDouble("lat");
                 double longitude = locationObject.getDouble("lng");
                 double accuracy = jsonObject.getDouble("accuracy");
-
-                Log.d(TAG, "Latitude: " + latitude);
-                Log.d(TAG, "Longitude: " + longitude);
-                Log.d(TAG, "Accuracy: " + accuracy);
 
                 saveDataToCsv(latitude, longitude, accuracy);
                 return new LocationData(latitude, longitude, accuracy);
@@ -285,6 +302,15 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         // Stop the handler when the activity is paused
-        handler.removeCallbacks(automaticScanRunnable );
+        // handler.removeCallbacks(automaticScanRunnable );
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (mWakeLock != null && mWakeLock.isHeld()) {
+            mWakeLock.release();
+            mWakeLock = null;
+        }
     }
 }
