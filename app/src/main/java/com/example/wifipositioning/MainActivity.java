@@ -64,20 +64,21 @@ public class MainActivity extends AppCompatActivity {
     private PowerManager.WakeLock mWakeLock;
 
     private final ActivityResultLauncher<String[]> requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), permissions -> {
-        if (!permissions.containsValue(false)) {
-            // Permissions granted, start scan
-            startWifiScan();
-        } else {
+        if (permissions.containsValue(false)) {
             // Permissions not granted, exit app
             System.exit(-1);
         }
     });
 
     private final Handler handler = new Handler();
-    private boolean isAutomaticScanRunning = true;
+    private boolean isAutomaticScanRunning = false;
     private final Runnable automaticScanRunnable  = new Runnable() {
         @Override
         public void run() {
+            if (!isAutomaticScanRunning) {
+                Log.d(TAG, "Automatic Wifi Scan stopped");
+                return;
+            }
             Log.d(TAG, "Starting Wifi Scan");
             startWifiScan();
             handler.postDelayed(this, 5000); // 5 seconds delay
@@ -103,9 +104,6 @@ public class MainActivity extends AppCompatActivity {
                 || ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             String[] permissions = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION};
             requestPermissionLauncher.launch(permissions);
-        } else {
-            // Permissions already granted, start scan
-            startWifiScan();
         }
 
         button.setOnClickListener(new View.OnClickListener() {
@@ -119,8 +117,7 @@ public class MainActivity extends AppCompatActivity {
                     // Start automatic scan
                     wifiManager = (WifiManager)getSystemService(Context.WIFI_SERVICE);
                     connection = wifiManager.getConnectionInfo();
-                    startWifiScan();
-                    handler.postDelayed(automaticScanRunnable, 5000); // Run every 5 seconds
+                    handler.post(automaticScanRunnable); // Run every 5 seconds
                     isAutomaticScanRunning = true;
                     button.setText("Stop");
                 }
@@ -166,8 +163,6 @@ public class MainActivity extends AppCompatActivity {
                     wifiObject.put("macAddress", scanResult.BSSID);
                     wifiObject.put("signalStrength", scanResult.level);
                     array.put(wifiObject);
-                    Log.d(TAG, "MAC: "+scanResult.BSSID);
-                    Log.d(TAG, "RSSI: "+ scanResult.level);
                 }
                 json.put("wifiAccessPoints", array);
 
@@ -295,7 +290,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         // Start the handler when the activity is resumed
-        handler.postDelayed(automaticScanRunnable , 0);
+        //handler.postDelayed(automaticScanRunnable , 0);
     }
 
     @Override
