@@ -100,8 +100,9 @@ public class WifiScanningService extends Service {
     };
 
     private Notification createNotification() {
+        Log.d(TAG, "createNotification: started");
         String CHANNEL_ID = "WifiScanningServiceChannel";
-        NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Wifi Scanning Service", NotificationManager.IMPORTANCE_DEFAULT);
+        NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Wifi Scanning Service", NotificationManager.IMPORTANCE_HIGH);
         notificationManager.createNotificationChannel(channel);
 
         Log.d(TAG, "Scanning wifi every " + scanDelay + " seconds");
@@ -109,7 +110,7 @@ public class WifiScanningService extends Service {
                 .setContentTitle("Wifi Scanning Service")
                 .setContentText("Scanning wifi every " + scanDelay + " seconds")
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+                .setPriority(NotificationCompat.PRIORITY_HIGH);
 
         return builder.build();
     }
