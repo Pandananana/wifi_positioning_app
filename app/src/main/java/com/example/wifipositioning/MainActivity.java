@@ -2,17 +2,10 @@ package com.example.wifipositioning;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import android.app.AlertDialog;
-import android.app.Notification;
-import android.app.Service;
-import android.app.job.JobInfo;
-import android.app.job.JobScheduler;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -24,7 +17,6 @@ import android.net.wifi.ScanResult;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.PersistableBundle;
 import android.os.PowerManager;
 import android.text.TextUtils;
 import android.util.Log;
@@ -45,9 +37,6 @@ import okhttp3.Response;
 import org.json.JSONException;
 import java.io.IOException;
 import android.os.Handler;
-import android.os.IBinder;
-
-
 
 public class MainActivity extends AppCompatActivity {
 
@@ -72,18 +61,6 @@ public class MainActivity extends AppCompatActivity {
 
     private final Handler handler = new Handler();
     private boolean isAutomaticScanRunning = false;
-    private final Runnable automaticScanRunnable  = new Runnable() {
-        @Override
-        public void run() {
-            if (!isAutomaticScanRunning) {
-                Log.d(TAG, "Automatic Wifi Scan stopped");
-                return;
-            }
-            Log.d(TAG, "Starting Wifi Scan");
-            startWifiScan();
-            handler.postDelayed(this, 5000); // 5 seconds delay
-        }
-    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -101,10 +78,12 @@ public class MainActivity extends AppCompatActivity {
 
         // Request permissions
         if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
-                || ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            String[] permissions = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION};
+                || ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.FOREGROUND_SERVICE) != PackageManager.PERMISSION_GRANTED) {
+            String[] permissions = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.FOREGROUND_SERVICE};
             requestPermissionLauncher.launch(permissions);
         }
+
 
         button.setOnClickListener(new View.OnClickListener() {
             public void onClick(View arg0) {
@@ -112,13 +91,15 @@ public class MainActivity extends AppCompatActivity {
                     // Stop automatic scan
                     handler.removeCallbacks(automaticScanRunnable);
                     isAutomaticScanRunning = false;
+                    stopWifiScanningService();
                     button.setText("Start");
                 } else {
                     // Start automatic scan
                     wifiManager = (WifiManager)getSystemService(Context.WIFI_SERVICE);
                     connection = wifiManager.getConnectionInfo();
-                    handler.post(automaticScanRunnable); // Run every 5 seconds
+                    //handler.post(automaticScanRunnable); // Run every 5 seconds
                     isAutomaticScanRunning = true;
+                    startWifiScanningService();
                     button.setText("Stop");
                 }
             }
@@ -128,14 +109,25 @@ public class MainActivity extends AppCompatActivity {
                 downloadCsvFile();
             }
         });
-
         delete.setOnClickListener(new View.OnClickListener() {
             public void onClick(View arg0) {
                 showDeleteConfirmationDialog();
             }
         });
-        
     }
+
+    private final Runnable automaticScanRunnable  = new Runnable() {
+        @Override
+        public void run() {
+            if (!isAutomaticScanRunning) {
+                Log.d(TAG, "Automatic Wifi Scan stopped");
+                return;
+            }
+            Log.d(TAG, "Starting Wifi Scan");
+            startWifiScan();
+            handler.postDelayed(this, 5000); // 5 seconds delay
+        }
+    };
             
     private void startWifiScan() {
         // Start the Wi-Fi scan
@@ -150,7 +142,7 @@ public class MainActivity extends AppCompatActivity {
         new SendWifiScanResultsTask().execute();
     }
 
-    private class SendWifiScanResultsTask extends AsyncTask<Void, Void, LocationData> {
+    public class SendWifiScanResultsTask extends AsyncTask<Void, Void, LocationData> {
         @Override
         protected LocationData doInBackground(Void... voids) {
             try {
@@ -249,6 +241,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void downloadCsvFile() {
         Intent intent = new Intent(Intent.ACTION_VIEW);
+        csvFile = new File(Environment.getExternalStorageDirectory() + "/" + Environment.DIRECTORY_DOWNLOADS + "/location_data.csv");
         Uri uri = FileProvider.getUriForFile(this, "com.example.myapp.fileprovider", csvFile);
         intent.setDataAndType(uri, "text/csv");
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -274,8 +267,8 @@ public class MainActivity extends AppCompatActivity {
         dialog.show();
     }
 
-
     private void deleteCsvFile() {
+        csvFile = new File(Environment.getExternalStorageDirectory() + "/" + Environment.DIRECTORY_DOWNLOADS + "/location_data.csv");
         if (csvFile.exists()) {
             boolean deleted = csvFile.delete();
             if (deleted) {
@@ -287,25 +280,23 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        // Start the handler when the activity is resumed
-        //handler.postDelayed(automaticScanRunnable , 0);
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        // Stop the handler when the activity is paused
-        // handler.removeCallbacks(automaticScanRunnable );
-    }
-
-    @Override
     protected void onDestroy() {
         super.onDestroy();
         if (mWakeLock != null && mWakeLock.isHeld()) {
             mWakeLock.release();
             mWakeLock = null;
         }
+    }
+
+    private void startWifiScanningService() {
+        Log.d(TAG, "startWifiScanningService: ");
+        Intent intent = new Intent(this, WifiScanningService.class);
+        ContextCompat.startForegroundService(this, intent);
+    }
+
+    public void stopWifiScanningService() {
+        Log.d(TAG, "stopWifiScanningService: ");
+        Intent intent = new Intent(this, WifiScanningService.class);
+        stopService(intent);
     }
 }
