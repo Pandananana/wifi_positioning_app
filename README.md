@@ -1,6 +1,6 @@
 # WiFi Positioning App
 
-This is an Android app that allows you to perform WiFi scanning to collect location data in the form of a CSV file. The app consists of two main Java files, |     `MainActivity`.java and WifiScanningService.java.
+This is an Android app that allows you to perform WiFi scanning to collect location data in the form of a CSV file. The app consists of two main Java files,      `MainActivity.java` and `WifiScanningService.java`.
 
 <br/>
 
@@ -26,6 +26,7 @@ The app requires the following permissions to function properly:
 - `ACCESS_FINE_LOCATION`: To scan for WiFi networks and collect location data.
 - `ACCESS_COARSE_LOCATION`: To scan for WiFi networks and collect location data.
 - `FOREGROUND_SERVICE`: To run the WiFi scanning service in the foreground and prevent it from being killed by the system.
+- Disable any battery optimization for the app, or else it won't run properly in the background.
 
 Make sure to grant these permissions when prompted by the app.
 
